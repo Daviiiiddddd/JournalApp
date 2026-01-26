@@ -1,0 +1,82 @@
+@page "/calendar"
+@inject NavigationManager Nav
+
+<h3>Calendar</h3>
+
+<div class="card">
+    <div style="display:flex; gap:10px; align-items:center;">
+        <button class="btn" @onclick="PrevMonth">◀</button>
+        <h4 style="margin:0;">@_currentMonth.ToString("MMMM yyyy")</h4>
+        <button class="btn" @onclick="NextMonth">▶</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; margin-top:10px;">
+        @foreach (var d in _weekDays)
+        {
+            <div style="font-weight:bold; text-align:center;">@d</div>
+        }
+
+        @foreach (var cell in _cells)
+        {
+            if (cell == null)
+            {
+                <div></div>
+            }
+            else
+            {
+                var date = cell.Value;
+                var isToday = date.Date == DateTime.Today;
+
+                <button class="btn"
+                        style="padding:10px; text-align:center; @(isToday ? "border:2px solid black;" : "")"
+                        @onclick="() => OpenDate(date)">
+                    @date.Day
+                </button>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private readonly string[] _weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    private DateTime _currentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private List<DateTime?> _cells = new();
+
+    protected override void OnInitialized()
+    {
+        BuildMonth();
+    }
+
+    private void BuildMonth()
+    {
+        _cells.Clear();
+
+        var first = new DateTime(_currentMonth.Year, _currentMonth.Month, 1);
+        int startOffset = (int)first.DayOfWeek;
+
+        for (int i = 0; i < startOffset; i++)
+            _cells.Add(null);
+
+        int days = DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
+        for (int day = 1; day <= days; day++)
+            _cells.Add(new DateTime(_currentMonth.Year, _currentMonth.Month, day));
+    }
+
+    private void PrevMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(-1);
+        BuildMonth();
+    }
+
+    private void NextMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(1);
+        BuildMonth();
+    }
+
+    private void OpenDate(DateTime date)
+    {
+        // Go to Today page with the selected date in URL
+        Nav.NavigateTo($"/today?date={date:yyyy-MM-dd}");
+    }
+}

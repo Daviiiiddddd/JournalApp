@@ -15,6 +15,10 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddMauiBlazorWebView();
+		// === Dependency Injection registrations ===
+		builder.Services.AddSingleton<JournalApp.Data.AppDb>();
+		builder.Services.AddSingleton<JournalApp.Data.Repositories.JournalRepository>();
+		builder.Services.AddSingleton<JournalApp.Services.JournalService>();
 
 #if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();

@@ -1,0 +1,205 @@
+@page "/today"
+@inject JournalApp.Services.JournalService Journal
+@inject NavigationManager Nav
+
+<h3>Journal Editor</h3>
+
+<div class="card">
+    <label><b>Select Date</b></label>
+    <input type="date" @bind="_selectedDate" @bind:format="yyyy-MM-dd" />
+    <button class="btn" style="margin-top:8px;" @onclick="LoadEntry">Load Entry</button>
+
+    <label style="margin-top:10px;"><b>Title</b></label>
+    <input @bind="_title" placeholder="Title..." />
+
+    <label style="margin-top:10px;"><b>Category</b></label>
+    <input @bind="_category" placeholder="Work / Health / Travel..." />
+
+    <label style="margin-top:10px;"><b>Primary Mood (Required)</b></label>
+    <select @bind="_primaryMood">
+        @foreach (var m in _allMoods)
+        {
+            <option value="@m">@m</option>
+        }
+    </select>
+
+    <label style="margin-top:10px;"><b>Secondary Moods (Optional, max 2)</b></label>
+    <input @bind="_secondaryCsv" placeholder="Example: Relaxed, Grateful" />
+
+    <label style="margin-top:10px;"><b>Tags (Optional)</b></label>
+    <input @bind="_tagsCsv" placeholder="Example: Work, Projects, Reflection" />
+
+    <label style="margin-top:10px;"><b>Content</b></label>
+    <textarea @bind="_contentHtml" rows="8" placeholder="For now, type plain text or HTML..."></textarea>
+
+    <div style="margin-top:12px; display:flex; gap:10px;">
+        <button class="btn" @onclick="Save">Save / Update</button>
+        <button class="btn danger" @onclick="Delete">Delete</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <p style="margin-top:10px; color:@_messageColor;"><b>@_message</b></p>
+    }
+</div>
+
+@code {
+    private DateTime _selectedDate = DateTime.Today;
+    private DateTime SelectedDate => _selectedDate.Date;
+
+    private string _title = "";
+    private string _category = "General";
+    private string _primaryMood = "Calm";
+    private string _secondaryCsv = "";
+    private string _tagsCsv = "";
+    private string _contentHtml = "";
+
+    private string _message = "";
+    private string _messageColor = "green";
+
+    private readonly string[] _allMoods =
+        JournalApp.Data.MoodData.Positive
+            .Concat(JournalApp.Data.MoodData.Neutral)
+            .Concat(JournalApp.Data.MoodData.Negative)
+            .ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // URL example: /today?date=2026-01-26
+            var uri = new Uri(Nav.Uri);
+
+            // uri.Query example: "?date=2026-01-26"
+            var query = uri.Query.TrimStart('?');
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var kv = part.Split('=', 2);
+                    if (kv.Length == 2 && kv[0] == "date")
+                    {
+                        var value = Uri.UnescapeDataString(kv[1]);
+                        if (DateTime.TryParse(value, out var parsed))
+                            _selectedDate = parsed.Date;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // if parsing fails, just use today
+            _selectedDate = DateTime.Today;
+        }
+
+        await LoadEntry();
+    }
+
+    private async Task LoadEntry()
+    {
+        _message = "";
+
+        try
+        {
+            var entry = await Journal.GetByDateAsync(SelectedDate);
+
+            if (entry == null)
+            {
+                // clear fields for new entry
+                _title = "";
+                _category = "General";
+                _primaryMood = "Calm";
+                _secondaryCsv = "";
+                _tagsCsv = "";
+                _contentHtml = "";
+                _message = "No entry found for this date. Create a new one";
+                _messageColor = "gray";
+                return;
+            }
+
+            _title = entry.Title;
+            _category = entry.Category;
+            _primaryMood = entry.PrimaryMood;
+            _secondaryCsv = entry.SecondaryMoodsCsv;
+            _tagsCsv = entry.TagsCsv;
+            _contentHtml = entry.ContentHtml;
+
+            _message = $"Loaded entry for {entry.EntryDate} ";
+            _messageColor = "green";
+        }
+        catch (Exception ex)
+        {
+            _message = "Error loading entry: " + ex.Message;
+            _messageColor = "red";
+        }
+    }
+
+    private async Task Save()
+    {
+        _message = "";
+
+        try
+        {
+            // Basic validation
+            if (string.IsNullOrWhiteSpace(_primaryMood))
+            {
+                _message = "Primary mood is required.";
+                _messageColor = "red";
+                return;
+            }
+
+            var secondary = (_secondaryCsv ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .ToList();
+
+            var tags = (_tagsCsv ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .ToList();
+
+            await Journal.SaveForDateAsync(
+                SelectedDate,
+                _title,
+                _contentHtml,
+                _category,
+                _primaryMood,
+                secondary,
+                tags);
+
+            _message = "Saved successfully";
+            _messageColor = "green";
+        }
+        catch (Exception ex)
+        {
+            _message = "Error saving: " + ex.Message;
+            _messageColor = "red";
+        }
+    }
+
+    private async Task Delete()
+    {
+        _message = "";
+
+        try
+        {
+            await Journal.DeleteByDateAsync(SelectedDate);
+
+            _title = "";
+            _category = "General";
+            _primaryMood = "Calm";
+            _secondaryCsv = "";
+            _tagsCsv = "";
+            _contentHtml = "";
+
+            _message = "Deleted successfully";
+            _messageColor = "green";
+        }
+        catch (Exception ex)
+        {
+            _message = "Error deleting: " + ex.Message;
+            _messageColor = "red";
+        }
+    }
+}

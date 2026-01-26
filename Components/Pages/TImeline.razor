@@ -1,0 +1,105 @@
+@page "/timeline"
+@inject JournalApp.Services.JournalService Journal
+
+<h3>Timeline</h3>
+
+<div class="card">
+    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
+        <div>
+            <label>From</label>
+            <input type="date" @bind="_from" @bind:format="yyyy-MM-dd" />
+        </div>
+        <div>
+            <label>To</label>
+            <input type="date" @bind="_to" @bind:format="yyyy-MM-dd" />
+        </div>
+        <div>
+            <label>Search (title/content)</label>
+            <input @bind="_search" placeholder="type keywords..." />
+        </div>
+
+        <div>
+            <label>Mood</label>
+            <input @bind="_mood" placeholder="e.g. Happy" />
+        </div>
+        <div>
+            <label>Tag</label>
+            <input @bind="_tag" placeholder="e.g. Work" />
+        </div>
+
+        <div style="display:flex; align-items:end;">
+            <button class="btn" style="width:100%;" @onclick="Load">Apply</button>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_items.Count == 0)
+{
+    <p>No entries found.</p>
+}
+else
+{
+    <p><b>Total:</b> @_items.Count entries</p>
+
+    @foreach (var e in PagedItems())
+    {
+        <div class="card">
+            <b>@e.EntryDate</b> — @e.Title
+            <div style="font-size:12px; opacity:0.8;">
+                Mood: @e.PrimaryMood (@e.PrimaryMoodCategory) | Category: @e.Category
+            </div>
+            <div style="font-size:12px; opacity:0.8;">
+                Tags: @e.TagsCsv
+            </div>
+        </div>
+    }
+
+    <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
+        <button class="btn" disabled="@(_page==1)" @onclick="Prev">Prev</button>
+        <span style="padding-top:8px;">Page @_page / @MaxPage()</span>
+        <button class="btn" disabled="@(_page>=MaxPage())" @onclick="Next">Next</button>
+    </div>
+}
+
+@code {
+    private DateTime _from = DateTime.Today.AddDays(-30);
+    private DateTime _to = DateTime.Today;
+
+    private string _search = "";
+    private string _mood = "";
+    private string _tag = "";
+
+    private List<JournalApp.Data.JournalEntry> _items = new();
+    private bool _loading = true;
+
+    private int _page = 1;
+    private const int PageSize = 8;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        _page = 1;
+
+        _items = await Journal.FilterAsync(_from, _to, _search, _mood, _tag);
+
+        _loading = false;
+    }
+
+    private IEnumerable<JournalApp.Data.JournalEntry> PagedItems()
+        => _items.Skip((_page - 1) * PageSize).Take(PageSize);
+
+    private int MaxPage()
+        => _items.Count == 0 ? 1 : (int)Math.Ceiling(_items.Count / (double)PageSize);
+
+    private void Prev() => _page = Math.Max(1, _page - 1);
+    private void Next() => _page = Math.Min(MaxPage(), _page + 1);
+}
