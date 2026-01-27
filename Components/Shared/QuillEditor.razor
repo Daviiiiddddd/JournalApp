@@ -1,0 +1,28 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div class="card">
+    <div id="@EditorId" style="height:250px; background:white;"></div>
+</div>
+
+@code {
+    [Parameter] public string EditorId { get; set; } = $"quill_{Guid.NewGuid():N}";
+    [Parameter] public string InitialHtml { get; set; } = "";
+
+    private bool _initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_initialized)
+        {
+            _initialized = true;
+            await JS.InvokeVoidAsync("quillCreate", EditorId, InitialHtml);
+        }
+    }
+
+    public async Task<string> GetHtmlAsync()
+        => await JS.InvokeAsync<string>("quillGetHtml", EditorId);
+
+    public async Task SetHtmlAsync(string html)
+        => await JS.InvokeVoidAsync("quillSetHtml", EditorId, html);
+}

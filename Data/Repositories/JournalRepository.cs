@@ -100,19 +100,24 @@ public class JournalRepository
     // Used for export + analytics
     // =========================
     public async Task<List<JournalEntry>> GetRangeAsync(DateTime from, DateTime to)
-    {
-        var c = await Conn();
+{
+    var c = await Conn();
 
-        var f = from.ToString("yyyy-MM-dd");
-        var t = to.ToString("yyyy-MM-dd");
+    var f = from.Date.ToString("yyyy-MM-dd");
+    var t = to.Date.ToString("yyyy-MM-dd");
 
-        // EntryDate stored as yyyy-MM-dd string,
-        // so string compare works correctly.
-        return await c.Table<JournalEntry>()
-            .Where(e => string.Compare(e.EntryDate, f) >= 0 && string.Compare(e.EntryDate, t) <= 0)
-            .OrderByDescending(e => e.EntryDate)
-            .ToListAsync();
-    }
+    // Load all rows (journal apps typically small data; OK for coursework)
+    var all = await c.Table<JournalEntry>()
+        .OrderByDescending(e => e.EntryDate)
+        .ToListAsync();
+
+    // Filter in C# (safe; avoids SQLite function issues)
+    return all
+        .Where(e => string.Compare(e.EntryDate, f, StringComparison.Ordinal) >= 0
+                 && string.Compare(e.EntryDate, t, StringComparison.Ordinal) <= 0)
+        .OrderByDescending(e => e.EntryDate)
+        .ToList();
+}
 
     // =========================
     // SEARCH (Title + content)

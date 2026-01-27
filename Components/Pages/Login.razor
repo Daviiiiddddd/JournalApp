@@ -1,0 +1,92 @@
+@page "/login"
+@inject JournalApp.Services.AuthService Auth
+@inject NavigationManager Nav
+
+<h3>JournalApp Lock</h3>
+
+<div class="card">
+    @if (_loading)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_hasPin)
+    {
+        <p><b>Create a new PIN</b> (minimum 4 digits)</p>
+
+        <input type="password" @bind="_pin" placeholder="New PIN" />
+        <input type="password" @bind="_pin2" placeholder="Confirm PIN" style="margin-top:8px;" />
+
+        <button class="btn" style="margin-top:10px;" @onclick="CreatePin">Save PIN</button>
+        <p style="color:red">@_error</p>
+    }
+    else
+    {
+        <p><b>Enter PIN</b></p>
+
+        <input type="password" @bind="_pin" placeholder="PIN" />
+        <button class="btn" style="margin-top:10px;" @onclick="Unlock">Unlock</button>
+        <button class="btn danger" style="margin-top:10px;" @onclick="LockNow">Lock Now</button>
+
+        <p style="color:red">@_error</p>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _hasPin = false;
+
+    private string _pin = "";
+    private string _pin2 = "";
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _hasPin = await Auth.HasPinAsync();
+        _loading = false;
+    }
+
+    private async Task CreatePin()
+    {
+        _error = "";
+
+        if (string.IsNullOrWhiteSpace(_pin) || _pin.Length < 4)
+        {
+            _error = "PIN must be at least 4 digits.";
+            return;
+        }
+
+        if (_pin != _pin2)
+        {
+            _error = "PIN does not match.";
+            return;
+        }
+
+        await Auth.SetPinAsync(_pin);
+
+        // Mark session unlocked
+        Preferences.Set("is_unlocked", true);
+
+        Nav.NavigateTo("/", true);
+    }
+
+    private async Task Unlock()
+    {
+        _error = "";
+
+        var ok = await Auth.VerifyPinAsync(_pin);
+        if (!ok)
+        {
+            _error = "Wrong PIN.";
+            return;
+        }
+
+        Preferences.Set("is_unlocked", true);
+        Nav.NavigateTo("/", true);
+    }
+
+    private void LockNow()
+    {
+        Preferences.Set("is_unlocked", false);
+        _error = "Locked. Restart app to test redirect.";
+    }
+}

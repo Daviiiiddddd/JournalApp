@@ -1,5 +1,125 @@
 ﻿@page "/"
+@inject JournalApp.Services.AnalyticsService Analytics
 
-<h1>Hello, world!</h1>
+<h3>Dashboard</h3>
 
-Welcome to your new app.
+<div class="card">
+    <h4>Date Range</h4>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div>
+            <label>From</label><br />
+            <input type="date" @bind="_from" @bind:format="yyyy-MM-dd" />
+        </div>
+        <div>
+            <label>To</label><br />
+            <input type="date" @bind="_to" @bind:format="yyyy-MM-dd" />
+        </div>
+        <div style="display:flex; align-items:end;">
+            <button class="btn" @onclick="Load">Refresh</button>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="card">
+        <h4>🔥 Streaks</h4>
+        <p><b>Current Streak:</b> @_streak.CurrentStreak day(s)</p>
+        <p><b>Longest Streak (Range):</b> @_streak.LongestStreak day(s)</p>
+        <p><b>Missed Days (Range):</b> @_streak.MissedDays</p>
+    </div>
+
+    <div class="card">
+        <h4>😊 Mood Distribution</h4>
+        @foreach (var kv in _moodDist)
+        {
+            <p>@kv.Key: <b>@kv.Value</b></p>
+        }
+    </div>
+
+    <div class="card">
+        <h4>⭐ Most Frequent Moods</h4>
+        @foreach (var kv in _topMoods)
+        {
+            <p>@kv.Key: <b>@kv.Value</b></p>
+        }
+    </div>
+
+    <div class="card">
+        <h4>🏷️ Most Used Tags</h4>
+        @foreach (var kv in _topTags)
+        {
+            <p>@kv.Key: <b>@kv.Value</b></p>
+        }
+    </div>
+
+    <div class="card">
+        <h4>📌 Tag Breakdown (Percent of entries containing tag)</h4>
+        @foreach (var kv in _tagBreakdown)
+        {
+            <p>@kv.Key: <b>@kv.Value.ToString("0.0")%</b></p>
+        }
+    </div>
+
+    <div class="card">
+        <h4>🧾 Word Count Trend</h4>
+        @if (_wordTrend.Count == 0)
+        {
+            <p>No data.</p>
+        }
+        else
+        {
+            @foreach (var item in _wordTrend)
+            {
+                <p>@item.Date: <b>@item.Words</b> words</p>
+            }
+        }
+    </div>
+}
+
+@code {
+
+    private string _error = "";
+    private DateTime _from = DateTime.Today.AddDays(-30);
+    private DateTime _to = DateTime.Today;
+
+    private bool _loading = true;
+
+    private JournalApp.Services.StreakInfo _streak = new(0, 0, 0);
+    private Dictionary<string, int> _moodDist = new();
+    private Dictionary<string, int> _topMoods = new();
+    private Dictionary<string, int> _topTags = new();
+    private Dictionary<string, double> _tagBreakdown = new();
+    private List<(string Date, int Words)> _wordTrend = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+    _loading = true;
+    _error = "";
+
+    try
+    {
+        _streak = await Analytics.GetStreakInfoAsync(_from, _to);
+        _moodDist = await Analytics.MoodDistributionAsync(_from, _to);
+        _topMoods = await Analytics.TopMoodsAsync(_from, _to);
+        _topTags = await Analytics.TopTagsAsync(_from, _to);
+        _tagBreakdown = await Analytics.TagBreakdownPercentAsync(_from, _to);
+        _wordTrend = await Analytics.WordTrendAsync(_from, _to);
+    }
+    catch (Exception ex)
+    {
+        _error = ex.ToString();
+    }
+
+    _loading = false;
+    }
+}

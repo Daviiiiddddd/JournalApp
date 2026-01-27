@@ -1,0 +1,96 @@
+@page "/export"
+@inject JournalApp.Services.PdfExportService Exporter
+
+<h3>Export to PDF</h3>
+
+<div class="card">
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <div>
+            <label>From</label><br />
+            <input type="date" @bind="_from" @bind:format="yyyy-MM-dd" />
+        </div>
+
+        <div>
+            <label>To</label><br />
+            <input type="date" @bind="_to" @bind:format="yyyy-MM-dd" />
+        </div>
+
+        <div style="display:flex; align-items:end;">
+            <button class="btn" @onclick="export" disabled="@_busy">
+                @_buttonText
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_msg))
+    {
+        <p style="margin-top:10px; color:@_color;"><b>@_msg</b></p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_path))
+    {
+        <p style="font-size:12px; margin-top:10px;">Saved at:</p>
+        <pre style="white-space:pre-wrap;">@_path</pre>
+
+        <button class="btn" style="margin-top:10px;" @onclick="OpenFolder">
+            Open Folder
+        </button>
+    }
+</div>
+
+@code {
+    private DateTime _from = DateTime.Today.AddDays(-30);
+    private DateTime _to = DateTime.Today;
+
+    private bool _busy = false;
+    private string _buttonText = "Export PDF";
+
+    private string _msg = "";
+    private string _color = "gray";
+    private string _path = "";
+
+    private async Task export()
+    {
+        _busy = true;
+        _buttonText = "Exporting...";
+        _msg = "";
+        _path = "";
+
+        try
+        {
+            if (_to < _from)
+            {
+                _msg = "Error: 'To' date cannot be earlier than 'From' date.";
+                _color = "red";
+                return;
+            }
+
+            var path = await Exporter.ExportAsync(_from, _to);
+
+            _path = path;
+            _msg = "Export successfully done.";
+            _color = "green";
+        }
+        catch (Exception ex)
+        {
+            _msg = "Export failed: " + ex.Message;
+            _color = "red";
+        }
+        finally
+        {
+            _busy = false;
+            _buttonText = "Export PDF";
+        }
+    }
+
+    private void OpenFolder()
+    {
+        try
+        {
+            var folder = Path.GetDirectoryName(_path);
+            if (!string.IsNullOrWhiteSpace(folder))
+                System.Diagnostics.Process.Start("explorer.exe", folder);
+        }
+        catch { }
+    }
+}

@@ -1,0 +1,42 @@
+@page "/settings"
+@inject JournalApp.Services.AuthService Auth
+@inject NavigationManager Nav
+
+<h3>⚙️ Settings</h3>
+
+<div class="card">
+    <h4>Security</h4>
+
+    <button class="btn danger" @onclick="LockNow">Lock Now</button>
+
+    <button class="btn" style="margin-left:10px;" @onclick="GoLogin">Change/Set PIN</button>
+
+    <button class="btn danger" style="margin-left:10px;" @onclick="RemovePin">Remove PIN</button>
+
+    <p style="margin-top:10px; color:@_color;"><b>@_msg</b></p>
+</div>
+
+@code {
+    private string _msg = "";
+    private string _color = "gray";
+
+    private void LockNow()
+    {
+        Preferences.Set("is_unlocked", false);
+        _msg = "Locked. Close and reopen the app to test auto-login redirect.";
+        _color = "green";
+    }
+
+    private void GoLogin()
+    {
+        Nav.NavigateTo("/login");
+    }
+
+    private void RemovePin()
+    {
+        Auth.ClearPin();
+        Preferences.Set("is_unlocked", true); // no pin means no lock needed
+        _msg = "PIN removed successfully.";
+        _color = "green";
+    }
+}

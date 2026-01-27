@@ -1,6 +1,7 @@
 @page "/today"
 @inject JournalApp.Services.JournalService Journal
 @inject NavigationManager Nav
+@using JournalApp.Components.Shared
 
 <h3>Journal Editor</h3>
 
@@ -29,8 +30,8 @@
     <label style="margin-top:10px;"><b>Tags (Optional)</b></label>
     <input @bind="_tagsCsv" placeholder="Example: Work, Projects, Reflection" />
 
-    <label style="margin-top:10px;"><b>Content</b></label>
-    <textarea @bind="_contentHtml" rows="8" placeholder="For now, type plain text or HTML..."></textarea>
+    <label style="margin-top:10px;"><b>Content (Rich Text)</b></label>
+    <QuillEditor @ref="_quill" InitialHtml="@_contentHtml" />
 
     <div style="margin-top:12px; display:flex; gap:10px;">
         <button class="btn" @onclick="Save">Save / Update</button>
@@ -46,6 +47,7 @@
 @code {
     private DateTime _selectedDate = DateTime.Today;
     private DateTime SelectedDate => _selectedDate.Date;
+    private QuillEditor? _quill;
 
     private string _title = "";
     private string _category = "General";
@@ -113,6 +115,10 @@
                 _secondaryCsv = "";
                 _tagsCsv = "";
                 _contentHtml = "";
+                
+            if (_quill != null)
+                await _quill.SetHtmlAsync("");
+                
                 _message = "No entry found for this date. Create a new one";
                 _messageColor = "gray";
                 return;
@@ -124,6 +130,9 @@
             _secondaryCsv = entry.SecondaryMoodsCsv;
             _tagsCsv = entry.TagsCsv;
             _contentHtml = entry.ContentHtml;
+
+            if (_quill != null)
+                await _quill.SetHtmlAsync(_contentHtml);
 
             _message = $"Loaded entry for {entry.EntryDate} ";
             _messageColor = "green";
@@ -159,10 +168,13 @@
                 .Select(x => x.Trim())
                 .ToList();
 
+            var html = _quill is null ? (_contentHtml ?? "") : await _quill.GetHtmlAsync();
+            _contentHtml = html; // keep local copy
+
             await Journal.SaveForDateAsync(
                 SelectedDate,
                 _title,
-                _contentHtml,
+                html,
                 _category,
                 _primaryMood,
                 secondary,
