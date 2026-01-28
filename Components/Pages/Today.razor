@@ -1,217 +1,237 @@
 @page "/today"
 @inject JournalApp.Services.JournalService Journal
+@inject JournalApp.Services.AuthService Auth
 @inject NavigationManager Nav
-@using JournalApp.Components.Shared
 
-<h3>Journal Editor</h3>
+<div class="page-header">
+    <div>
+        <h1 class="h-title">📝 Today</h1>
+        <p class="h-sub">Write your journal entry for today.</p>
+    </div>
+    <span class="badge info">@_today.ToString("yyyy-MM-dd")</span>
+</div>
 
-<div class="card">
-    <label><b>Select Date</b></label>
-    <input type="date" @bind="_selectedDate" @bind:format="yyyy-MM-dd" />
-    <button class="btn" style="margin-top:8px;" @onclick="LoadEntry">Load Entry</button>
+<div class="grid cols-2" style="align-items:start;">
+    <!-- Editor -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div>
+                <div style="font-weight:1000; font-size:1.05rem;">Entry</div>
+                <div class="helper">One entry per day. Edit anytime.</div>
+            </div>
 
-    <label style="margin-top:10px;"><b>Title</b></label>
-    <input @bind="_title" placeholder="Title..." />
+            <span class="badge @(_loaded ? "success" : "warn")">
+                @(_loaded ? "Loaded" : "New")
+            </span>
+        </div>
 
-    <label style="margin-top:10px;"><b>Category</b></label>
-    <input @bind="_category" placeholder="Work / Health / Travel..." />
+        <div class="section">
+            <div class="field">
+                <div class="label">Title</div>
+                <input class="input" @bind="_title" placeholder="How was your day?" />
+            </div>
 
-    <label style="margin-top:10px;"><b>Primary Mood (Required)</b></label>
-    <select @bind="_primaryMood">
-        @foreach (var m in _allMoods)
-        {
-            <option value="@m">@m</option>
-        }
-    </select>
+            <div class="field">
+                <div class="label">Write</div>
+                <textarea class="input" rows="10" @bind="_content"
+                          placeholder="Write your thoughts here..."></textarea>
+                <div class="helper">Tip: Keep it real. No pressure.</div>
+            </div>
 
-    <label style="margin-top:10px;"><b>Secondary Moods (Optional, max 2)</b></label>
-    <input @bind="_secondaryCsv" placeholder="Example: Relaxed, Grateful" />
+            @if (!string.IsNullOrWhiteSpace(_msg))
+            {
+                <div class="card soft" style="padding:.85rem;">
+                    <b style="color:@_msgColor">@_msg</b>
+                </div>
+            }
 
-    <label style="margin-top:10px;"><b>Tags (Optional)</b></label>
-    <input @bind="_tagsCsv" placeholder="Example: Work, Projects, Reflection" />
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+                <button class="btn primary" @onclick="Save" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save Entry")
+                </button>
+                <button class="btn" @onclick="Clear" disabled="@_saving">Clear</button>
+                <button class="btn" @onclick="GoHistory" disabled="@_saving">Open History</button>
 
-    <label style="margin-top:10px;"><b>Content (Rich Text)</b></label>
-    <QuillEditor @ref="_quill" InitialHtml="@_contentHtml" />
-
-    <div style="margin-top:12px; display:flex; gap:10px;">
-        <button class="btn" @onclick="Save">Save / Update</button>
-        <button class="btn danger" @onclick="Delete">Delete</button>
+                <span class="helper" style="margin-left:auto;">
+                    Words: <b>@_wordCount</b>
+                </span>
+            </div>
+        </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(_message))
-    {
-        <p style="margin-top:10px; color:@_messageColor;"><b>@_message</b></p>
-    }
+    <!-- Sidebar -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:1000; font-size:1.05rem;">Mood & Tags</div>
+                <div class="helper">Helps analytics + filtering later.</div>
+            </div>
+            <span class="badge info">@(_moodCategory)</span>
+        </div>
+
+        <div class="section">
+            <div class="field">
+                <div class="label">Mood</div>
+                <select class="input" @bind="_mood">
+                    <option value="">Select mood</option>
+                    <option>Happy</option>
+                    <option>Calm</option>
+                    <option>Motivated</option>
+                    <option>Neutral</option>
+                    <option>Tired</option>
+                    <option>Stressed</option>
+                    <option>Sad</option>
+                    <option>Angry</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <div class="label">Mood Category</div>
+                <select class="input" @bind="_moodCategory">
+                    <option>Positive</option>
+                    <option>Neutral</option>
+                    <option>Negative</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <div class="label">Tags (comma separated)</div>
+                <input class="input" @bind="_tags" placeholder="study, work, friends" />
+            </div>
+
+            <div class="card soft" style="padding:.85rem; margin-top:10px;">
+                <div style="font-weight:900;">Quick prompts</div>
+                <ul class="helper" style="margin:8px 0 0 18px;">
+                    <li>What was the best moment today?</li>
+                    <li>What stressed you out?</li>
+                    <li>One thing you learned?</li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </div>
 
 @code {
-    private DateTime _selectedDate = DateTime.Today;
-    private DateTime SelectedDate => _selectedDate.Date;
-    private QuillEditor? _quill;
+    private readonly DateTime _today = DateTime.Today;
+
+    private bool _loaded = false;
+    private bool _saving = false;
 
     private string _title = "";
-    private string _category = "General";
-    private string _primaryMood = "Calm";
-    private string _secondaryCsv = "";
-    private string _tagsCsv = "";
-    private string _contentHtml = "";
+    private string _content = "";
+    private string _mood = "";
+    private string _moodCategory = "Positive";
+    private string _tags = "";
 
-    private string _message = "";
-    private string _messageColor = "green";
-
-    private readonly string[] _allMoods =
-        JournalApp.Data.MoodData.Positive
-            .Concat(JournalApp.Data.MoodData.Neutral)
-            .Concat(JournalApp.Data.MoodData.Negative)
-            .ToArray();
+    private string _msg = "";
+    private string _msgColor = "var(--muted)";
+    private int _wordCount = 0;
 
     protected override async Task OnInitializedAsync()
     {
-        try
+        if (!Auth.IsLoggedIn)
         {
-            // URL example: /today?date=2026-01-26
-            var uri = new Uri(Nav.Uri);
-
-            // uri.Query example: "?date=2026-01-26"
-            var query = uri.Query.TrimStart('?');
-
-            if (!string.IsNullOrWhiteSpace(query))
-            {
-                foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var kv = part.Split('=', 2);
-                    if (kv.Length == 2 && kv[0] == "date")
-                    {
-                        var value = Uri.UnescapeDataString(kv[1]);
-                        if (DateTime.TryParse(value, out var parsed))
-                            _selectedDate = parsed.Date;
-                    }
-                }
-            }
+            Nav.NavigateTo("/login", true);
+            return;
         }
-        catch
-        {
-            // if parsing fails, just use today
-            _selectedDate = DateTime.Today;
-        }
-
-        await LoadEntry();
+        await Load();
+        Recount();
     }
 
-    private async Task LoadEntry()
+    private async Task Load()
     {
-        _message = "";
+        _msg = "";
+        var existing = await Journal.GetByDateAsync(_today);
 
-        try
+        if (existing != null)
         {
-            var entry = await Journal.GetByDateAsync(SelectedDate);
-
-            if (entry == null)
-            {
-                // clear fields for new entry
-                _title = "";
-                _category = "General";
-                _primaryMood = "Calm";
-                _secondaryCsv = "";
-                _tagsCsv = "";
-                _contentHtml = "";
-                
-            if (_quill != null)
-                await _quill.SetHtmlAsync("");
-                
-                _message = "No entry found for this date. Create a new one";
-                _messageColor = "gray";
-                return;
-            }
-
-            _title = entry.Title;
-            _category = entry.Category;
-            _primaryMood = entry.PrimaryMood;
-            _secondaryCsv = entry.SecondaryMoodsCsv;
-            _tagsCsv = entry.TagsCsv;
-            _contentHtml = entry.ContentHtml;
-
-            if (_quill != null)
-                await _quill.SetHtmlAsync(_contentHtml);
-
-            _message = $"Loaded entry for {entry.EntryDate} ";
-            _messageColor = "green";
+            _loaded = true;
+            _title = existing.Title ?? "";
+            _content = HtmlToPlain(existing.ContentHtml ?? "");
+            _mood = existing.PrimaryMood ?? "";
+            _moodCategory = string.IsNullOrWhiteSpace(existing.PrimaryMoodCategory) ? "Positive" : existing.PrimaryMoodCategory!;
+            _tags = existing.TagsCsv ?? "";
         }
-        catch (Exception ex)
+        else
         {
-            _message = "Error loading entry: " + ex.Message;
-            _messageColor = "red";
+            _loaded = false;
         }
     }
 
     private async Task Save()
     {
-        _message = "";
+        _saving = true;
+        _msg = "";
+        _msgColor = "var(--muted)";
 
         try
         {
-            // Basic validation
-            if (string.IsNullOrWhiteSpace(_primaryMood))
-            {
-                _message = "Primary mood is required.";
-                _messageColor = "red";
-                return;
-            }
+            if (string.IsNullOrWhiteSpace(_title)) _title = "Untitled";
 
-            var secondary = (_secondaryCsv ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim())
-                .ToList();
+            await Journal.UpsertAsync(
+                date: _today,
+                title: _title,
+                content: _content,
+                mood: _mood,
+                moodCategory: _moodCategory,
+                tagsCsv: _tags
+            );
 
-            var tags = (_tagsCsv ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim())
-                .ToList();
-
-            var html = _quill is null ? (_contentHtml ?? "") : await _quill.GetHtmlAsync();
-            _contentHtml = html; // keep local copy
-
-            await Journal.SaveForDateAsync(
-                SelectedDate,
-                _title,
-                html,
-                _category,
-                _primaryMood,
-                secondary,
-                tags);
-
-            _message = "Saved successfully";
-            _messageColor = "green";
+            _loaded = true;
+            _msg = "Saved ✅";
+            _msgColor = "var(--success)";
         }
         catch (Exception ex)
         {
-            _message = "Error saving: " + ex.Message;
-            _messageColor = "red";
+            _msg = "Save failed: " + ex.Message;
+            _msgColor = "var(--danger)";
+        }
+        finally
+        {
+            _saving = false;
+            Recount();
         }
     }
 
-    private async Task Delete()
+    private void Clear()
     {
-        _message = "";
+        _title = "";
+        _content = "";
+        _mood = "";
+        _moodCategory = "Positive";
+        _tags = "";
+        _msg = "Cleared (not saved).";
+        _msgColor = "var(--warning)";
+        Recount();
+    }
 
-        try
-        {
-            await Journal.DeleteByDateAsync(SelectedDate);
+    private void GoHistory() => Nav.NavigateTo("/history", true);
 
-            _title = "";
-            _category = "General";
-            _primaryMood = "Calm";
-            _secondaryCsv = "";
-            _tagsCsv = "";
-            _contentHtml = "";
+    private void Recount()
+    {
+        _wordCount = CountWords(_content);
+    }
 
-            _message = "Deleted successfully";
-            _messageColor = "green";
-        }
-        catch (Exception ex)
-        {
-            _message = "Error deleting: " + ex.Message;
-            _messageColor = "red";
-        }
+    private static int CountWords(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 0;
+        var parts = text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length;
+    }
+
+    // Converts stored HTML (with <br/>) back into plain text for textarea
+    private static string HtmlToPlain(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return "";
+
+        var s = html.Replace("<br/>", "\n").Replace("<br>", "\n").Replace("<br />", "\n");
+
+        // strip remaining tags
+        s = System.Text.RegularExpressions.Regex.Replace(s, "<.*?>", " ");
+
+        // decode entities
+        s = System.Net.WebUtility.HtmlDecode(s);
+
+        return s.Trim();
     }
 }

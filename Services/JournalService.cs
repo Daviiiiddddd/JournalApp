@@ -65,6 +65,16 @@ public class JournalService
         await _repo.UpsertAsync(entry);
     }
 
+    public async Task DeleteAllAsync()
+    {
+        var all = await FilterAsync(DateTime.Today.AddYears(-50), DateTime.Today.AddYears(50), "", "", "");
+        foreach (var e in all)
+        {
+            if (DateTime.TryParse(e.EntryDate, out var d))
+            await DeleteByDateAsync(d.Date);
+        }
+    }
+
     public Task DeleteByDateAsync(DateTime date)
         => _repo.DeleteByDateAsync(date);
 
@@ -74,11 +84,73 @@ public class JournalService
     public Task<List<JournalEntry>> FilterAsync(DateTime from, DateTime to, string? search, string? mood, string? tag)
         => _repo.FilterAsync(from, to, search, mood, tag);
 
-    private static int CountWordsFromHtml(string html)
+    public static int CountWordsFromHtml(string? html)
     {
         if (string.IsNullOrWhiteSpace(html)) return 0;
         var text = System.Text.RegularExpressions.Regex.Replace(html, "<.*?>", " ");
         var parts = text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries);
         return parts.Length;
+    }
+
+    private async Task SaveAsync(
+    DateTime date,
+    string title,
+    string contentHtml,
+    string mood,
+    string moodCategory,
+    string tagsCsv)
+{
+    var entry = new JournalEntry
+    {
+        EntryDate = date.ToString("yyyy-MM-dd"),
+        Title = string.IsNullOrWhiteSpace(title) ? "Untitled" : title,
+        ContentHtml = contentHtml ?? "",
+        PrimaryMood = mood,
+        PrimaryMoodCategory = moodCategory,
+        TagsCsv = tagsCsv,
+        WordCount = CountWordsFromHtml(contentHtml)
+    };
+
+    await _repo.UpsertAsync(entry);
+}
+
+    private async Task UpdateAsync(
+        DateTime date,
+        string title,
+        string contentHtml,
+        string mood,
+        string moodCategory,
+        string tagsCsv)
+    {
+        var existing = await GetByDateAsync(date);
+        if (existing == null) return;
+
+        existing.Title = string.IsNullOrWhiteSpace(title) ? "Untitled" : title;
+        existing.ContentHtml = contentHtml ?? "";
+        existing.PrimaryMood = mood;
+        existing.PrimaryMoodCategory = moodCategory;
+        existing.TagsCsv = tagsCsv;
+        existing.WordCount = CountWordsFromHtml(contentHtml);
+        await _repo.UpsertAsync(existing);
+}
+
+    public async Task UpsertAsync(DateTime date, string title, string content, string mood, string moodCategory, string tagsCsv)
+    {
+        // Convert plain text -> simple HTML (so Analytics & Export work)
+        var safe = System.Net.WebUtility.HtmlEncode(content ?? "");
+        var html = safe.Replace("\r\n", "\n").Replace("\n", "<br/>");
+
+        var existing = await GetByDateAsync(date);
+
+        if (existing == null)
+        {
+            // Create new entry
+            await SaveAsync(date, title, html, mood, moodCategory, tagsCsv);
+        }
+        else
+        {
+            // Update existing entry
+            await UpdateAsync(date, title, html, mood, moodCategory, tagsCsv);
+        }
     }
 }

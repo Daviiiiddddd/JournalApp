@@ -1,6 +1,18 @@
-﻿<Router AppAssembly="@typeof(MauiProgram).Assembly">
+﻿@using Microsoft.AspNetCore.Components.Routing
+@using JournalApp.Components.Layout
+
+<Router AppAssembly="@typeof(JournalApp.App).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
         <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
+
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <div class="card">
+                <b>Page not found</b>
+                <div class="muted">This route doesn’t exist.</div>
+            </div>
+        </LayoutView>
+    </NotFound>
 </Router>

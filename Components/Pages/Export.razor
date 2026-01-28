@@ -1,96 +1,116 @@
 @page "/export"
 @inject JournalApp.Services.PdfExportService Exporter
+@inject JournalApp.Services.JournalService Journal
 
-<h3>Export to PDF</h3>
+<div class="page-header">
+    <div>
+        <h1 class="h-title">📄 Export</h1>
+        <p class="h-sub">Export your journal entries for backup or sharing (HTML file, no extra libraries).</p>
+    </div>
+</div>
 
 <div class="card">
-    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
         <div>
-            <label>From</label><br />
-            <input type="date" @bind="_from" @bind:format="yyyy-MM-dd" />
+            <div style="font-weight:1000; font-size:1.05rem;">Export Range</div>
+            <div class="helper">Choose dates, then export.</div>
+        </div>
+        <span class="badge info">HTML</span>
+    </div>
+
+    <div class="grid cols-3 section">
+        <div class="field">
+            <div class="label">From</div>
+            <input class="input" type="date" @bind="_from" @bind:format="yyyy-MM-dd" />
         </div>
 
-        <div>
-            <label>To</label><br />
-            <input type="date" @bind="_to" @bind:format="yyyy-MM-dd" />
+        <div class="field">
+            <div class="label">To</div>
+            <input class="input" type="date" @bind="_to" @bind:format="yyyy-MM-dd" />
         </div>
 
-        <div style="display:flex; align-items:end;">
-            <button class="btn" @onclick="export" disabled="@_busy">
-                @_buttonText
-            </button>
+        <div class="field">
+            <div class="label">File name</div>
+            <input class="input" @bind="_fileName" placeholder="Journal_Export" />
+            <div class="helper">.html will be added automatically</div>
         </div>
+    </div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn primary" @onclick="ExportNow" disabled="@_busy">
+            @if (_busy) { <span>Exporting...</span> } else { <span>Export</span> }
+        </button>
+        <button class="btn" @onclick="Reset" disabled="@_busy">Reset</button>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_msg))
     {
-        <p style="margin-top:10px; color:@_color;"><b>@_msg</b></p>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(_path))
-    {
-        <p style="font-size:12px; margin-top:10px;">Saved at:</p>
-        <pre style="white-space:pre-wrap;">@_path</pre>
-
-        <button class="btn" style="margin-top:10px;" @onclick="OpenFolder">
-            Open Folder
-        </button>
+        <div class="card soft section" style="padding:.9rem;">
+            <b style="color:@_msgColor">@_msg</b>
+            @if (!string.IsNullOrWhiteSpace(_path))
+            {
+                <div class="helper" style="margin-top:6px;">Saved at: <b>@_path</b></div>
+            }
+        </div>
     }
 </div>
 
 @code {
     private DateTime _from = DateTime.Today.AddDays(-30);
     private DateTime _to = DateTime.Today;
+    private string _fileName = "Journal_Export";
 
     private bool _busy = false;
-    private string _buttonText = "Export PDF";
-
     private string _msg = "";
-    private string _color = "gray";
+    private string _msgColor = "var(--muted)";
     private string _path = "";
 
-    private async Task export()
+    private async Task ExportNow()
     {
-        _busy = true;
-        _buttonText = "Exporting...";
         _msg = "";
         _path = "";
+        _msgColor = "var(--muted)";
+        _busy = true;
 
         try
         {
             if (_to < _from)
             {
-                _msg = "Error: 'To' date cannot be earlier than 'From' date.";
-                _color = "red";
+                _msg = "Invalid range: 'To' date must be after 'From' date.";
+                _msgColor = "var(--warning)";
                 return;
             }
 
-            var path = await Exporter.ExportAsync(_from, _to);
+            var safeName = string.IsNullOrWhiteSpace(_fileName) ? "Journal_Export" : _fileName.Trim();
+            safeName = string.Concat(safeName.Split(Path.GetInvalidFileNameChars()));
+            if (!safeName.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+                safeName += ".html";
 
-            _path = path;
-            _msg = "Export successfully done.";
-            _color = "green";
+            var entries = await Journal.FilterAsync(_from, _to, "", "", "");
+
+            _path = await Exporter.ExportPdfAsync(entries, _from, _to, safeName);
+
+            _msg = $"Export complete ✅ ({entries.Count} entries)";
+            _msgColor = "var(--success)";
         }
         catch (Exception ex)
         {
             _msg = "Export failed: " + ex.Message;
-            _color = "red";
+            _msgColor = "var(--danger)";
         }
         finally
         {
             _busy = false;
-            _buttonText = "Export PDF";
         }
     }
 
-    private void OpenFolder()
+    private void Reset()
     {
-        try
-        {
-            var folder = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrWhiteSpace(folder))
-                System.Diagnostics.Process.Start("explorer.exe", folder);
-        }
-        catch { }
+        _from = DateTime.Today.AddDays(-30);
+        _to = DateTime.Today;
+        _fileName = "Journal_Export";
+        _msg = "";
+        _path = "";
+        _msgColor = "var(--muted)";
     }
 }

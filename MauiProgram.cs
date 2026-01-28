@@ -15,6 +15,28 @@ public static class MauiProgram
 			});
 
 		builder.Services.AddMauiBlazorWebView();
+		AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+		{
+    		try
+    		{
+        		var path = Path.Combine(FileSystem.AppDataDirectory, "crash.log");
+        		File.WriteAllText(path, e.ExceptionObject?.ToString() ?? "Unknown crash");
+    		}
+    		catch { }
+		};
+
+		TaskScheduler.UnobservedTaskException += (_, e) =>
+		{
+    		try
+    		{
+        		var path = Path.Combine(FileSystem.AppDataDirectory, "crash.log");
+        		File.WriteAllText(path, e.Exception?.ToString() ?? "Unknown task crash");
+    		}
+    		catch { }
+		};
+
+		Console.WriteLine(FileSystem.AppDataDirectory);
+
 		#if DEBUG
 		builder.Services.AddBlazorWebViewDeveloperTools();
 		#endif
@@ -25,12 +47,11 @@ public static class MauiProgram
 		builder.Services.AddSingleton<JournalApp.Services.AuthService>();
 		builder.Services.AddSingleton<JournalApp.Services.AnalyticsService>();
 		builder.Services.AddSingleton<JournalApp.Services.PdfExportService>();
-
-#if DEBUG
-		builder.Services.AddBlazorWebViewDeveloperTools();
-		builder.Logging.AddDebug();
-#endif
+		builder.Services.AddMauiBlazorWebView();
 
 		return builder.Build();
 	}
+	
 }
+
+		

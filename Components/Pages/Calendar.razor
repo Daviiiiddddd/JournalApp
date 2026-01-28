@@ -1,37 +1,45 @@
 @page "/calendar"
 @inject NavigationManager Nav
 
-<h3>Calendar</h3>
+<h3>🗓️ Calendar</h3>
+<p class="muted">Pick a day to open or edit that entry.</p>
 
 <div class="card">
-    <div style="display:flex; gap:10px; align-items:center;">
-        <button class="btn" @onclick="PrevMonth">◀</button>
-        <h4 style="margin:0;">@_currentMonth.ToString("MMMM yyyy")</h4>
-        <button class="btn" @onclick="NextMonth">▶</button>
+    <div class="calendar-header">
+        <div>
+            <div class="calendar-month">@_currentMonth.ToString("MMMM yyyy")</div>
+            <div class="muted" style="font-size:0.9rem;">Tap any day to open the editor</div>
+        </div>
+
+        <div class="calendar-actions">
+            <button class="btn secondary" @onclick="JumpToday">Today</button>
+            <button class="btn secondary" @onclick="PrevMonth">◀</button>
+            <button class="btn secondary" @onclick="NextMonth">▶</button>
+        </div>
     </div>
 
-    <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; margin-top:10px;">
+    <div class="calendar-grid">
         @foreach (var d in _weekDays)
         {
-            <div style="font-weight:bold; text-align:center;">@d</div>
+            <div class="weekday">@d</div>
         }
 
         @foreach (var cell in _cells)
         {
             if (cell == null)
             {
-                <div></div>
+                <div class="day-empty"></div>
             }
             else
             {
                 var date = cell.Value;
                 var isToday = date.Date == DateTime.Today;
 
-                <button class="btn"
-                        style="padding:10px; text-align:center; @(isToday ? "border:2px solid black;" : "")"
-                        @onclick="() => OpenDate(date)">
+                <div class="day-tile @(isToday ? "day-today" : "")"
+                     title="@date.ToString("yyyy-MM-dd")"
+                     @onclick="() => OpenDate(date)">
                     @date.Day
-                </button>
+                </div>
             }
         }
     </div>
@@ -74,9 +82,14 @@
         BuildMonth();
     }
 
+    private void JumpToday()
+    {
+        _currentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+        BuildMonth();
+    }
+
     private void OpenDate(DateTime date)
     {
-        // Go to Today page with the selected date in URL
         Nav.NavigateTo($"/today?date={date:yyyy-MM-dd}");
     }
 }

@@ -2,91 +2,75 @@
 @inject JournalApp.Services.AuthService Auth
 @inject NavigationManager Nav
 
-<h3>JournalApp Lock</h3>
+<div class="page-header">
+    <div>
+        <h1 class="h-title">🔐 Login</h1>
+        <p class="h-sub">Sign in to access your journal.</p>
+    </div>
+</div>
 
-<div class="card">
-    @if (_loading)
+<div class="card" style="max-width:420px; margin:auto;">
+    <div class="field">
+        <div class="label">Username</div>
+        <input class="input" @bind="_username" placeholder="admin" />
+    </div>
+
+    <div class="field">
+        <div class="label">Password</div>
+        <input class="input" type="password" @bind="_password" placeholder="••••••••" />
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
     {
-        <p>Loading...</p>
+        <div class="card soft" style="padding:.85rem; margin-top:10px;">
+            <b style="color:var(--danger)">@_error</b>
+        </div>
     }
-    else if (!_hasPin)
-    {
-        <p><b>Create a new PIN</b> (minimum 4 digits)</p>
 
-        <input type="password" @bind="_pin" placeholder="New PIN" />
-        <input type="password" @bind="_pin2" placeholder="Confirm PIN" style="margin-top:8px;" />
+    <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn primary" style="width:100%;" @onclick="DoLogin" disabled="@_busy">
+            @(_busy ? "Logging in..." : "Login")
+        </button>
+    </div>
 
-        <button class="btn" style="margin-top:10px;" @onclick="CreatePin">Save PIN</button>
-        <p style="color:red">@_error</p>
-    }
-    else
-    {
-        <p><b>Enter PIN</b></p>
-
-        <input type="password" @bind="_pin" placeholder="PIN" />
-        <button class="btn" style="margin-top:10px;" @onclick="Unlock">Unlock</button>
-        <button class="btn danger" style="margin-top:10px;" @onclick="LockNow">Lock Now</button>
-
-        <p style="color:red">@_error</p>
-    }
+    <div class="helper" style="margin-top:10px;">
+        Demo: <b>admin / admin123</b>
+    </div>
 </div>
 
 @code {
-    private bool _loading = true;
-    private bool _hasPin = false;
-
-    private string _pin = "";
-    private string _pin2 = "";
+    private string _username = "";
+    private string _password = "";
     private string _error = "";
+    private bool _busy = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        _hasPin = await Auth.HasPinAsync();
-        _loading = false;
+        Auth.EnsureSeedUser();
+
+        // If already logged in, go directly
+        if (Auth.IsLoggedIn)
+            Nav.NavigateTo("/", true);
     }
 
-    private async Task CreatePin()
+    private Task DoLogin()
     {
         _error = "";
+        _busy = true;
 
-        if (string.IsNullOrWhiteSpace(_pin) || _pin.Length < 4)
+        try
         {
-            _error = "PIN must be at least 4 digits.";
-            return;
+            var ok = Auth.Login(_username, _password);
+            if (ok)
+                Nav.NavigateTo("/", true);
+            else
+                _error = "Invalid username or password.";
+        }
+        finally
+        {
+            _busy = false;
         }
 
-        if (_pin != _pin2)
-        {
-            _error = "PIN does not match.";
-            return;
-        }
-
-        await Auth.SetPinAsync(_pin);
-
-        // Mark session unlocked
-        Preferences.Set("is_unlocked", true);
-
-        Nav.NavigateTo("/", true);
-    }
-
-    private async Task Unlock()
-    {
-        _error = "";
-
-        var ok = await Auth.VerifyPinAsync(_pin);
-        if (!ok)
-        {
-            _error = "Wrong PIN.";
-            return;
-        }
-
-        Preferences.Set("is_unlocked", true);
-        Nav.NavigateTo("/", true);
-    }
-
-    private void LockNow()
-    {
-        Preferences.Set("is_unlocked", false);
-        _error = "Locked. Restart app to test redirect.";
+        return Task.CompletedTask;
     }
 }

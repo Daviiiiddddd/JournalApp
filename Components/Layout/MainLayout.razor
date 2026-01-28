@@ -1,29 +1,129 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Routing
 @inject NavigationManager Nav
 @inject JournalApp.Services.AuthService Auth
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<div class="app-shell data-theme=@_themeClass">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="logo">J</div>
+            <div>
+                <div class="title">JournalApp</div>
+                <div class="subtitle">Write • Mood • Reflect</div>
+            </div>
+        </div>
 
-    <main>
-        <article class="content px-4">
-            @Body
-        </article>
+        @if (Auth.IsLoggedIn)
+        {
+            <div class="card soft" style="margin:12px; padding:.8rem;">
+                <div style="font-weight:900;">👤 Logged in</div>
+                <div class="helper" style="margin-top:4px;">
+                    @Auth.CurrentUsername
+                </div>
+            </div>
+
+            <nav class="nav">
+                <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
+                    <span>🏠</span><span>Home</span>
+                </NavLink>
+
+                <NavLink href="/today" class="nav-link">
+                    <span>📝</span><span>Today</span>
+                </NavLink>
+
+                <NavLink href="/calendar" class="nav-link">
+                    <span>🗓️</span><span>Calendar</span>
+                </NavLink>
+
+                <NavLink href="/history" class="nav-link">
+                    <span>📜</span><span>History</span>
+                </NavLink>
+
+                <NavLink href="/export" class="nav-link">
+                    <span>📄</span><span>Export</span>
+                </NavLink>
+
+                <NavLink href="/settings" class="nav-link">
+                    <span>⚙️</span><span>Settings</span>
+                </NavLink>
+            </nav>
+
+            <div class="sidebar-footer">
+                 <div style="margin-top:12px;">
+                    <button class="btn danger" style="width:100%;" @onclick="Logout">
+                        🚪 Logout
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="card soft" style="margin:12px; padding:.8rem;">
+                <div style="margin-top:12px;">
+                    <button class="btn primary" style="width:100%;" @onclick="GoLogin">
+                        Welcome! Login Here
+                    </button>
+                </div>
+            </div>
+        }
+    </aside>
+
+    <main class="main fade-in">
+        <ErrorBoundary>
+            <ChildContent>
+                @Body
+            </ChildContent>
+
+            <ErrorContent Context="ex">
+                <div class="card" style="border-color: rgba(239,68,68,.35);">
+                    <div style="font-weight:1000; font-size:1.05rem;">⚠️ UI crashed</div>
+                    <div class="helper" style="margin-top:8px;">
+                        <b>@ex.GetType().Name:</b> @ex.Message
+                    </div>
+
+                    <details style="margin-top:10px;">
+                        <summary class="btn">Show details</summary>
+                        <pre style="white-space:pre-wrap; margin-top:10px;">@ex.ToString()</pre>
+                    </details>
+
+                    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn primary" @onclick="GoLogin">Go to Login</button>
+                    </div>
+                </div>
+            </ErrorContent>
+        </ErrorBoundary>
     </main>
 </div>
 
 @code {
-    protected override async Task OnInitializedAsync()
-    {
-        var hasPin = await Auth.HasPinAsync();
-        var unlocked = Preferences.Get("is_unlocked", false);
+    private string _themeClass = "light";
 
-        // If PIN exists and user is not unlocked → force login
-        if (hasPin && !unlocked && !Nav.Uri.Contains("/login"))
-        {
-            Nav.NavigateTo("/login", true);
-        }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        ApplyTheme();
+
+        if (!Auth.IsLoggedIn && !Nav.Uri.Contains("/login", StringComparison.OrdinalIgnoreCase))
+    {
+        Nav.NavigateTo("/login", true);
+    }
+}
+
+    private void ApplyTheme()
+    {
+        var theme = Preferences.Get("theme", "light");
+        _themeClass = theme == "dark" ? "dark" : "light";
+    }
+
+    private void Logout()
+    {
+        Auth.Logout();
+        Nav.NavigateTo("/login", true);
+    }
+
+    private void GoLogin()
+    {
+        Nav.NavigateTo("/login", true);
     }
 }

@@ -1,42 +1,244 @@
 @page "/settings"
 @inject JournalApp.Services.AuthService Auth
+@inject JournalApp.Services.JournalService Journal
 @inject NavigationManager Nav
 
-<h3>⚙️ Settings</h3>
+<div class="page-header">
+    <div>
+        <h1 class="h-title">⚙️ Settings</h1>
+        <p class="h-sub">Customize theme, manage account, and maintain your journal data.</p>
+    </div>
+</div>
 
-<div class="card">
-    <h4>Security</h4>
+<div class="grid cols-2">
+    <!-- Theme -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:1000; font-size:1.05rem;">🎨 Theme</div>
+                <div class="helper">Light / Dark mode for better readability.</div>
+            </div>
+            <span class="badge info">@(_theme == "dark" ? "Dark" : "Light")</span>
+        </div>
 
-    <button class="btn danger" @onclick="LockNow">Lock Now</button>
+        <div class="section" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn @(_theme=="light" ? "primary" : "")" @onclick="@(() => SetTheme("light"))">☀️ Light</button>
+            <button class="btn @(_theme=="dark" ? "primary" : "")" @onclick="@(() => SetTheme("dark"))">🌙 Dark</button>
+        </div>
 
-    <button class="btn" style="margin-left:10px;" @onclick="GoLogin">Change/Set PIN</button>
+        @if (!string.IsNullOrWhiteSpace(_themeMsg))
+        {
+            <div class="card soft section" style="padding:.9rem;">
+                <b style="color:var(--success)">@_themeMsg</b>
+            </div>
+        }
+    </div>
 
-    <button class="btn danger" style="margin-left:10px;" @onclick="RemovePin">Remove PIN</button>
+    <!-- Account -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:1000; font-size:1.05rem;">👤 Account</div>
+                <div class="helper">Change username/password and logout.</div>
+            </div>
+            <span class="badge success">@("Logged in as " + (Auth.CurrentUsername == "" ? "user" : Auth.CurrentUsername))</span>
+        </div>
 
-    <p style="margin-top:10px; color:@_color;"><b>@_msg</b></p>
+        <div class="section">
+            <div class="field">
+                <div class="label">New Username</div>
+                <input class="input" @bind="_newUsername" placeholder="e.g. david" />
+            </div>
+
+            <div class="field">
+                <div class="label">Current Password</div>
+                <input class="input" type="password" @bind="_currentPassword" placeholder="••••••••" />
+            </div>
+
+            <div class="field">
+                <div class="label">New Password</div>
+                <input class="input" type="password" @bind="_newPassword" placeholder="min 6 characters" />
+            </div>
+
+            <div class="field">
+                <div class="label">Confirm New Password</div>
+                <input class="input" type="password" @bind="_confirmPassword" placeholder="repeat new password" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_accMsg))
+            {
+                <div class="card soft" style="padding:.85rem; margin-top:10px;">
+                    <b style="color:@_accMsgColor">@_accMsg</b>
+                </div>
+            }
+
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+                <button class="btn primary" @onclick="SaveAccount" disabled="@_busy">
+                    Save Changes
+                </button>
+
+                <button class="btn danger" @onclick="DoLogout" disabled="@_busy">
+                    Logout
+                </button>
+            </div>
+
+            <div class="helper" style="margin-top:10px;">
+                Note: This is stored locally (Preferences) for now.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Danger Zone -->
+<div class="card section">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div>
+            <div style="font-weight:1000; font-size:1.05rem;">🧨 Danger Zone</div>
+            <div class="helper">Careful: these actions cannot be undone.</div>
+        </div>
+        <span class="badge warn">Irreversible</span>
+    </div>
+
+    <div class="section" style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn danger" @onclick="DeleteAll" disabled="@_busy">Delete All Entries</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_dangerMsg))
+    {
+        <div class="card soft section" style="padding:.85rem;">
+            <b style="color:var(--danger)">@_dangerMsg</b>
+        </div>
+    }
 </div>
 
 @code {
-    private string _msg = "";
-    private string _color = "gray";
+    private string _theme = "light";
+    private string _themeMsg = "";
 
-    private void LockNow()
+    private bool _busy = false;
+
+    private string _newUsername = "";
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private string _confirmPassword = "";
+
+    private string _accMsg = "";
+    private string _accMsgColor = "var(--muted)";
+
+    private string _dangerMsg = "";
+
+    protected override void OnInitialized()
     {
-        Preferences.Set("is_unlocked", false);
-        _msg = "Locked. Close and reopen the app to test auto-login redirect.";
-        _color = "green";
+        _theme = Preferences.Get("theme", "light");
     }
 
-    private void GoLogin()
+    private void SetTheme(string value)
     {
-        Nav.NavigateTo("/login");
+        _theme = value;
+        Preferences.Set("theme", value);
+        _themeMsg = $"Theme set to {_theme} ✅";
     }
 
-    private void RemovePin()
+    private Task SaveAccount()
     {
-        Auth.ClearPin();
-        Preferences.Set("is_unlocked", true); // no pin means no lock needed
-        _msg = "PIN removed successfully.";
-        _color = "green";
+        _accMsg = "";
+        _dangerMsg = "";
+        _accMsgColor = "var(--muted)";
+        _busy = true;
+
+        try
+        {
+            // Must verify current password (use existing username from Auth)
+            var currentUser = Auth.CurrentUsername;
+            if (string.IsNullOrWhiteSpace(currentUser))
+                currentUser = "admin"; // fallback (seed user)
+
+            var verified = Auth.VerifyPassword(_currentPassword);
+            if (!verified)
+            {
+                _accMsg = "Current password is incorrect.";
+                _accMsgColor = "var(--danger)";
+                return Task.CompletedTask;
+            }
+
+            // If user typed a new password, validate it
+            var wantsNewPass = !string.IsNullOrWhiteSpace(_newPassword) || !string.IsNullOrWhiteSpace(_confirmPassword);
+            if (wantsNewPass)
+            {
+                if (string.IsNullOrWhiteSpace(_newPassword) || _newPassword.Length < 6)
+                {
+                    _accMsg = "New password must be at least 6 characters.";
+                    _accMsgColor = "var(--warning)";
+                    return Task.CompletedTask;
+                }
+
+                if (_newPassword != _confirmPassword)
+                {
+                    _accMsg = "Password confirmation does not match.";
+                    _accMsgColor = "var(--danger)";
+                    return Task.CompletedTask;
+                }
+            }
+
+            // Decide final username/password to save
+            var finalUsername = string.IsNullOrWhiteSpace(_newUsername) ? currentUser : _newUsername.Trim();
+            var finalPassword = wantsNewPass ? _newPassword : _currentPassword;
+
+            var ok = Auth.ChangeCredentials(finalUsername, finalPassword);
+            if (!ok)
+            {
+                _accMsg = "Could not update account (empty username/password).";
+                _accMsgColor = "var(--danger)";
+                return Task.CompletedTask;
+            }
+
+            // Re-login with new credentials so session stays valid
+            Auth.Login(finalUsername, finalPassword);
+
+            _newUsername = "";
+            _currentPassword = "";
+            _newPassword = "";
+            _confirmPassword = "";
+
+            _accMsg = "Account updated successfully ✅";
+            _accMsgColor = "var(--success)";
+        }
+        catch (Exception ex)
+        {
+            _accMsg = "Error: " + ex.Message;
+            _accMsgColor = "var(--danger)";
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void DoLogout()
+    {
+        Auth.Logout();
+        Nav.NavigateTo("/login", true);
+    }
+
+    private async Task DeleteAll()
+    {
+        _dangerMsg = "";
+        _busy = true;
+
+        try
+        {
+            await Journal.DeleteAllAsync();
+            _dangerMsg = "All entries deleted ✅";
+        }
+        catch (Exception ex)
+        {
+            _dangerMsg = "Delete failed: " + ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }
